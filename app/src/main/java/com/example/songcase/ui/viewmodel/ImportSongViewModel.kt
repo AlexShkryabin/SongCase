@@ -2,17 +2,16 @@ package com.example.songcase.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.songcase.data.SongDataStore
 import com.example.songcase.data.model.Song
-import com.example.songcase.data.repository.SongRepository
+import com.example.songcase.utils.HolyChordsParser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Date
 
-class ImportSongViewModel(
-    private val repository: SongRepository = SongRepository()
-) : ViewModel() {
+class ImportSongViewModel : ViewModel() {
     
     private val _uiState = MutableStateFlow(ImportSongUiState())
     val uiState: StateFlow<ImportSongUiState> = _uiState.asStateFlow()
@@ -33,23 +32,32 @@ class ImportSongViewModel(
                     isSuccess = false
                 )
                 
-                // Простая заглушка для демонстрации
-                val song = Song(
-                    number = 1,
-                    title = "Импортированная песня",
-                    author = "Неизвестный автор",
-                    key = "C",
-                    text = "Текст песни будет здесь",
-                    isFavorite = false,
-                    createdAt = Date()
-                )
+                // Проверяем, является ли URL валидным для holychords.pro
+                if (!HolyChordsParser.isValidHolyChordsUrl(url)) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "URL должен быть с сайта holychords.pro"
+                    )
+                    return@launch
+                }
                 
-                repository.insertSong(song)
+                // Парсим песню с сайта
+                val song = HolyChordsParser.parseSongFromUrl(url)
                 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isSuccess = true
-                )
+                if (song != null) {
+                    // Добавляем песню в хранилище
+                    SongDataStore.addSong(song)
+                    
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isSuccess = true
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Не удалось загрузить песню с указанного URL"
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

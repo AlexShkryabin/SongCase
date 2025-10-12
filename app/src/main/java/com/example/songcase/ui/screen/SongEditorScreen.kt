@@ -59,7 +59,9 @@ fun SongEditorScreen(
         when {
             uiState.isLoading -> {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
@@ -67,22 +69,26 @@ fun SongEditorScreen(
             }
             
             uiState.error != null -> {
-                ErrorMessage(
-                    message = uiState.error ?: "Неизвестная ошибка",
-                    onDismiss = { viewModel.clearError() }
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    ErrorMessage(
+                        message = uiState.error ?: "Неизвестная ошибка",
+                        onDismiss = { viewModel.clearError() }
+                    )
+                }
             }
             
             else -> {
-                SongEditorForm(
-                    uiState = uiState,
-                    onTitleChange = { viewModel.updateTitle(it) },
-                    onAuthorChange = { viewModel.updateAuthor(it) },
-                    onTextChange = { viewModel.updateText(it) },
-                    onNumberChange = { viewModel.updateNumber(it) },
-                    onKeyChange = { viewModel.updateKey(it) },
-                    modifier = Modifier.padding(paddingValues)
-                )
+                        SongEditorForm(
+                            uiState = uiState,
+                            onTitleChange = { viewModel.updateTitle(it) },
+                            onTextChange = { viewModel.updateText(it) },
+                            onNumberChange = { viewModel.updateNumber(it) },
+                            modifier = Modifier.padding(paddingValues)
+                        )
             }
         }
     }
@@ -92,10 +98,8 @@ fun SongEditorScreen(
 private fun SongEditorForm(
     uiState: SongEditorUiState,
     onTitleChange: (String) -> Unit,
-    onAuthorChange: (String) -> Unit,
     onTextChange: (String) -> Unit,
     onNumberChange: (Int) -> Unit,
-    onKeyChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -121,24 +125,6 @@ private fun SongEditorForm(
             value = uiState.title,
             onValueChange = onTitleChange,
             label = { Text("Название песни") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        
-        // Автор
-        OutlinedTextField(
-            value = uiState.author,
-            onValueChange = onAuthorChange,
-            label = { Text("Автор") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        
-        // Тональность
-        OutlinedTextField(
-            value = uiState.key,
-            onValueChange = onKeyChange,
-            label = { Text("Тональность (например, C, Am, F#m)") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )

@@ -60,7 +60,9 @@ fun FavoritesScreen(
             
             uiState.songs.isEmpty() -> {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -84,6 +86,7 @@ fun FavoritesScreen(
             
             else -> {
                 LazyColumn(
+                    modifier = Modifier.padding(paddingValues),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -91,7 +94,9 @@ fun FavoritesScreen(
                         SongItem(
                             song = song,
                             onClick = { onSongClick(song.id) },
-                            onToggleFavorite = { viewModel.toggleFavorite(song) }
+                            onToggleFavorite = { 
+                                viewModel.toggleFavorite(song)
+                            }
                         )
                     }
                 }
@@ -124,13 +129,6 @@ private fun SongItem(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                if (song.author != null) {
-                    Text(
-                        text = song.author,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
             
             IconButton(onClick = onToggleFavorite) {

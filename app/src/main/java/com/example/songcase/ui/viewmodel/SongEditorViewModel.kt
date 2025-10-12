@@ -2,19 +2,15 @@ package com.example.songcase.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.songcase.data.model.Chord
+import com.example.songcase.data.SongDataStore
 import com.example.songcase.data.model.Song
-import com.example.songcase.data.repository.SongRepository
-import com.example.songcase.utils.ChordUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Date
 
-class SongEditorViewModel(
-    private val repository: SongRepository = SongRepository()
-) : ViewModel() {
+class SongEditorViewModel : ViewModel() {
     
     private val _uiState = MutableStateFlow(SongEditorUiState())
     val uiState: StateFlow<SongEditorUiState> = _uiState.asStateFlow()
@@ -22,21 +18,18 @@ class SongEditorViewModel(
     private var currentSongId: Long? = null
     
     fun loadSong(songId: Long) {
+        currentSongId = songId
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(isLoading = true)
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
                 
-                val song = repository.getSongById(songId)
+                val song = SongDataStore.getSongById(songId)
                 if (song != null) {
-                    currentSongId = songId
                     _uiState.value = _uiState.value.copy(
+                        isLoading = false,
                         number = song.number,
                         title = song.title,
-                        author = song.author ?: "",
-                        text = song.text,
-                        key = song.key ?: "",
-                        isLoading = false,
-                        error = null
+                        text = song.text
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -47,7 +40,7 @@ class SongEditorViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message
+                    error = "Ошибка при загрузке песни: ${e.message}"
                 )
             }
         }
@@ -61,126 +54,67 @@ class SongEditorViewModel(
         _uiState.value = _uiState.value.copy(title = title)
     }
     
-    fun updateAuthor(author: String) {
-        _uiState.value = _uiState.value.copy(author = author)
-    }
-    
     fun updateText(text: String) {
         _uiState.value = _uiState.value.copy(text = text)
-    }
-    
-    fun updateKey(key: String) {
-        _uiState.value = _uiState.value.copy(key = key)
     }
     
     fun saveSong() {
         viewModelScope.launch {
             try {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+                
                 val state = _uiState.value
+                val song = Song(
+                    id = currentSongId ?: 0L,
+                    number = state.number,
+                    title = state.title,
+                    text = state.text,
+                    isFavorite = false,
+                    createdAt = Date(),
+                    updatedAt = Date()
+                )
                 
-                if (state.title.isBlank()) {
-                    _uiState.value = _uiState.value.copy(error = "Название песни не может быть пустым")
-                    return@launch
-                }
-                
-                if (state.text.isBlank()) {
-                    _uiState.value = _uiState.value.copy(error = "Текст песни не может быть пустым")
-                    return@launch
-                }
-                
-                val song = if (currentSongId != null) {
+                if (currentSongId != null) {
                     // Обновляем существующую песню
-                    Song(
-                        id = currentSongId!!,
-                        number = state.number,
-                        title = state.title,
-                        text = state.text,
-                        author = state.author.takeIf { it.isNotBlank() },
-                        key = state.key.takeIf { it.isNotBlank() },
-                        updatedAt = Date()
-                    )
+                    SongDataStore.updateSong(song)
                 } else {
-                    // Создаем новую песню
-                    val maxNumber = repository.getMaxSongNumber() ?: 0
-                    Song(
-                        number = if (state.number > 0) state.number else maxNumber + 1,
-                        title = state.title,
-                        text = state.text,
-                        author = state.author.takeIf { it.isNotBlank() },
-                        key = state.key.takeIf { it.isNotBlank() }
-                    )
+                    // Добавляем новую песню
+                    SongDataStore.addSong(song)
                 }
                 
-                val savedSongId = if (currentSongId != null) {
-                    repository.updateSong(song)
-                    currentSongId!!
-                } else {
-                    repository.insertSong(song)
-                }
-                
-                // Парсим и сохраняем аккорды
-                parseAndSaveChords(savedSongId, state.text)
-                
-                _uiState.value = _uiState.value.copy(error = null)
-                
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isSuccess = true
+                )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = e.message)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Ошибка при сохранении песни: ${e.message}"
+                )
             }
-        }
-    }
-    
-    private suspend fun parseAndSaveChords(songId: Long, text: String) {
-        try {
-            // Удаляем старые аккорды
-            repository.deleteChordsForSong(songId)
-            
-            // Парсим аккорды из текста
-            val lines = text.split('\n')
-            val chords = mutableListOf<Chord>()
-            
-            lines.forEachIndexed { lineIndex, line ->
-                val words = line.split(' ')
-                var position = 0
-                
-                words.forEach { word ->
-                    if (ChordUtils.isChord(word)) {
-                        chords.add(
-                            Chord(
-                                songId = songId,
-                                chord = word,
-                                position = position,
-                                lineNumber = lineIndex
-                            )
-                        )
-                    }
-                    position += word.length + 1 // +1 для пробела
-                }
-            }
-            
-            // Сохраняем аккорды
-            if (chords.isNotEmpty()) {
-                repository.insertChords(chords)
-            }
-            
-        } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(error = "Ошибка при сохранении аккордов: ${e.message}")
         }
     }
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
+    
+    private fun validateForm(): Boolean {
+        val state = _uiState.value
+        return state.title.isNotBlank() && 
+               state.text.isNotBlank() && 
+               state.number > 0
+    }
 }
 
 data class SongEditorUiState(
-    val number: Int = 0,
+    val number: Int = 1,
     val title: String = "",
-    val author: String = "",
     val text: String = "",
-    val key: String = "",
     val isLoading: Boolean = false,
+    val isSuccess: Boolean = false,
     val error: String? = null
 ) {
     val canSave: Boolean
-        get() = title.isNotBlank() && text.isNotBlank()
+        get() = title.isNotBlank() && text.isNotBlank() && number > 0 && !isLoading
 }

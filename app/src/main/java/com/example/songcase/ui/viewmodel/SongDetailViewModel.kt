@@ -2,42 +2,36 @@ package com.example.songcase.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.songcase.data.SongDataStore
 import com.example.songcase.data.model.Chord
 import com.example.songcase.data.model.Song
-import com.example.songcase.data.repository.SongRepository
 import com.example.songcase.utils.ChordUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class SongDetailViewModel(
-    private val repository: SongRepository = SongRepository()
-) : ViewModel() {
+class SongDetailViewModel : ViewModel() {
     
     private val _uiState = MutableStateFlow(SongDetailUiState())
     val uiState: StateFlow<SongDetailUiState> = _uiState.asStateFlow()
     
     private var currentSong: Song? = null
-    private var originalChords: List<Chord> = emptyList()
-    private var currentTransposition = 0
     
     fun loadSong(songId: Long) {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(isLoading = true)
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
                 
-                val song = repository.getSongById(songId)
+                val song = SongDataStore.getSongById(songId)
                 if (song != null) {
                     currentSong = song
+                    val chords = ChordUtils.findChordsInText(song.text)
                     _uiState.value = _uiState.value.copy(
-                        song = song,
                         isLoading = false,
-                        error = null
+                        song = song,
+                        chords = chords
                     )
-                    
-                    // Загружаем аккорды
-                    loadChords(songId)
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -47,24 +41,8 @@ class SongDetailViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message
+                    error = "Ошибка при загрузке песни: ${e.message}"
                 )
-            }
-        }
-    }
-    
-    private fun loadChords(songId: Long) {
-        viewModelScope.launch {
-            try {
-                repository.getChordsForSong(songId).collect { chords ->
-                    originalChords = chords
-                    _uiState.value = _uiState.value.copy(
-                        chords = chords,
-                        showChords = chords.isNotEmpty()
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = e.message)
             }
         }
     }
@@ -76,30 +54,42 @@ class SongDetailViewModel(
     }
     
     fun transposeChords(semitones: Int) {
-        currentTransposition = semitones
-        val transposedChords = originalChords.map { chord ->
-            val transposedChordName = ChordUtils.transposeChord(chord.chord, semitones)
-            chord.copy(chord = transposedChordName)
+        val newTransposition = _uiState.value.transposition + semitones
+        
+        // Всегда получаем оригинальную песню из хранилища
+        val originalSong = SongDataStore.getSongById(currentSong?.id ?: 0)
+        if (originalSong != null) {
+            val transposedText = ChordUtils.transposeText(originalSong.text, newTransposition)
+            val transposedSong = originalSong.copy(text = transposedText)
+            val transposedChords = ChordUtils.findChordsInText(transposedText)
+            
+            _uiState.value = _uiState.value.copy(
+                transposition = newTransposition,
+                song = transposedSong,
+                chords = transposedChords
+            )
         }
-        _uiState.value = _uiState.value.copy(
-            chords = transposedChords,
-            transposition = semitones
-        )
+    }
+    
+    fun resetTransposition() {
+        val originalSong = SongDataStore.getSongById(currentSong?.id ?: 0)
+        if (originalSong != null) {
+            val originalChords = ChordUtils.findChordsInText(originalSong.text)
+            _uiState.value = _uiState.value.copy(
+                transposition = 0,
+                song = originalSong,
+                chords = originalChords
+            )
+        }
     }
     
     fun toggleFavorite() {
-        val song = currentSong ?: return
-        viewModelScope.launch {
-            try {
-                repository.updateFavoriteStatus(song.id, !song.isFavorite)
-                currentSong = song.copy(isFavorite = !song.isFavorite)
-                _uiState.value = _uiState.value.copy(
-                    song = currentSong,
-                    error = null
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = e.message)
-            }
+        currentSong?.let { song ->
+            SongDataStore.toggleFavorite(song.id)
+            // Обновляем локальное состояние
+            val updatedSong = song.copy(isFavorite = !song.isFavorite)
+            currentSong = updatedSong
+            _uiState.value = _uiState.value.copy(song = updatedSong)
         }
     }
     
@@ -111,7 +101,7 @@ class SongDetailViewModel(
 data class SongDetailUiState(
     val song: Song? = null,
     val chords: List<Chord> = emptyList(),
-    val showChords: Boolean = false,
+    val showChords: Boolean = true,
     val transposition: Int = 0,
     val isLoading: Boolean = false,
     val error: String? = null

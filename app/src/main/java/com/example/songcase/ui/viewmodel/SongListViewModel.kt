@@ -2,79 +2,64 @@ package com.example.songcase.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.songcase.data.SongDataStore
 import com.example.songcase.data.model.Song
-import com.example.songcase.data.repository.SongRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-class SongListViewModel(
-    private val repository: SongRepository = SongRepository()
-) : ViewModel() {
+class SongListViewModel : ViewModel() {
     
     private val _uiState = MutableStateFlow(SongListUiState())
     val uiState: StateFlow<SongListUiState> = _uiState.asStateFlow()
     
     private val _searchQuery = MutableStateFlow("")
-    val searchQuery = _searchQuery.asStateFlow()
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     
     init {
         loadSongs()
+        
+        // Объединяем поток песен с поисковым запросом для фильтрации
+        viewModelScope.launch {
+            combine(SongDataStore.songs, _searchQuery) { songs, query ->
+                if (query.isBlank()) {
+                    songs
+                } else {
+                    SongDataStore.searchSongs(query)
+                }
+            }.collect { filteredSongs ->
+                _uiState.value = _uiState.value.copy(songs = filteredSongs)
+            }
+        }
     }
     
     fun loadSongs() {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(isLoading = true)
-                repository.getAllSongs().collect { songs ->
-                    _uiState.value = _uiState.value.copy(
-                        songs = songs,
-                        isLoading = false,
-                        error = null
-                    )
-                }
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+                
+                // Данные уже загружены в SongDataStore, просто обновляем состояние
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    songs = SongDataStore.songs.value
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message
+                    error = "Ошибка при загрузке песен: ${e.message}"
                 )
             }
         }
     }
     
-    fun searchSongs(query: String) {
+    fun updateSearchQuery(query: String) {
         _searchQuery.value = query
-        viewModelScope.launch {
-            try {
-                if (query.isBlank()) {
-                    loadSongs()
-                } else {
-                    repository.searchSongs(query).collect { songs ->
-                        _uiState.value = _uiState.value.copy(
-                            songs = songs,
-                            isLoading = false,
-                            error = null
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message
-                )
-            }
-        }
     }
     
     fun toggleFavorite(song: Song) {
-        viewModelScope.launch {
-            try {
-                repository.updateFavoriteStatus(song.id, !song.isFavorite)
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = e.message)
-            }
-        }
+        SongDataStore.toggleFavorite(song.id)
     }
     
     fun clearError() {

@@ -25,7 +25,7 @@ fun SongListScreen(
     onSongClick: (Long) -> Unit,
     onAddSongClick: () -> Unit,
     onFavoritesClick: () -> Unit,
-    onImportClick: () -> Unit,
+    onJsonImportClick: () -> Unit,
     viewModel: SongListViewModel = remember { SongListViewModel() }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -40,14 +40,14 @@ fun SongListScreen(
                     IconButton(onClick = { showSearch = !showSearch }) {
                         Icon(Icons.Default.Search, contentDescription = "Поиск")
                     }
-                    IconButton(onClick = onImportClick) {
-                        Icon(Icons.Default.Add, contentDescription = "Импорт")
+                    IconButton(onClick = onAddSongClick) {
+                        Icon(Icons.Default.Add, contentDescription = "Добавить песню")
+                    }
+                    IconButton(onClick = onJsonImportClick) {
+                        Text("JSON", style = MaterialTheme.typography.bodySmall)
                     }
                     IconButton(onClick = onFavoritesClick) {
                         Icon(Icons.Default.Favorite, contentDescription = "Избранное")
-                    }
-                    IconButton(onClick = onAddSongClick) {
-                        Icon(Icons.Default.Add, contentDescription = "Добавить песню")
                     }
                 }
             )
@@ -63,7 +63,7 @@ fun SongListScreen(
                     query = searchQuery,
                     onQueryChange = { query ->
                         searchQuery = query
-                        viewModel.searchSongs(query)
+                        viewModel.updateSearchQuery(query)
                     },
                     modifier = Modifier.padding(16.dp)
                 )
@@ -91,7 +91,9 @@ fun SongListScreen(
                     SongList(
                         songs = uiState.songs,
                         onSongClick = onSongClick,
-                        onToggleFavorite = { song -> viewModel.toggleFavorite(song) }
+                        onToggleFavorite = { song -> 
+                            viewModel.toggleFavorite(song)
+                        }
                     )
                 }
             }
@@ -158,13 +160,6 @@ private fun SongItem(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                if (song.author != null) {
-                    Text(
-                        text = song.author,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
             
             IconButton(onClick = onToggleFavorite) {

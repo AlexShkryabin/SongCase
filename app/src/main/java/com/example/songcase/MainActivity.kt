@@ -11,12 +11,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.songcase.navigation.SongNavigation
+import com.example.songcase.data.SongDataStore
 import com.example.songcase.ui.theme.SongCaseTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // Инициализируем SongDataStore с контекстом
+        SongDataStore.initialize(this)
+        
         setContent {
             SongCaseTheme {
                 Surface(

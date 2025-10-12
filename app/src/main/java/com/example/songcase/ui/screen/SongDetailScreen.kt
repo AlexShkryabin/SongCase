@@ -9,6 +9,13 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.songcase.data.AppSettings
 // Hilt removed for simplicity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.songcase.data.model.Chord
@@ -26,9 +35,13 @@ import com.example.songcase.ui.viewmodel.SongDetailViewModel
 fun SongDetailScreen(
     songId: Long,
     onBackClick: () -> Unit,
+    onEditClick: (Long) -> Unit = {},
+    onSettingsClick: () -> Unit = {},
+    onDeleteClick: (Long) -> Unit = {},
     viewModel: SongDetailViewModel = remember { SongDetailViewModel() }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showDeleteDialog by remember { mutableStateOf(false) }
     
     LaunchedEffect(songId) {
         viewModel.loadSong(songId)
@@ -44,10 +57,10 @@ fun SongDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.toggleChordsVisibility() }) {
+                    IconButton(onClick = { onEditClick(songId) }) {
                         Icon(
-                            if (uiState.showChords) Icons.Default.PlayArrow else Icons.Default.Close,
-                            contentDescription = if (uiState.showChords) "Скрыть аккорды" else "Показать аккорды"
+                            Icons.Default.Edit,
+                            contentDescription = "Редактировать песню"
                         )
                     }
                     IconButton(onClick = { viewModel.toggleFavorite() }) {
@@ -56,6 +69,34 @@ fun SongDetailScreen(
                             contentDescription = "Добавить в избранное"
                         )
                     }
+                    var showMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "Меню"
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Настройки") },
+                                onClick = {
+                                    onSettingsClick()
+                                    showMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Удалить песню") },
+                                onClick = {
+                                    showDeleteDialog = true
+                                    showMenu = false
+                                }
+                            )
+                        }
+                    }
                 }
             )
         }
@@ -63,7 +104,9 @@ fun SongDetailScreen(
         when {
             uiState.isLoading -> {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
@@ -71,23 +114,56 @@ fun SongDetailScreen(
             }
             
             uiState.error != null -> {
-                ErrorMessage(
-                    message = uiState.error ?: "Неизвестная ошибка",
-                    onRetry = { viewModel.loadSong(songId) },
-                    onDismiss = { viewModel.clearError() }
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    ErrorMessage(
+                        message = uiState.error ?: "Неизвестная ошибка",
+                        onRetry = { viewModel.loadSong(songId) },
+                        onDismiss = { viewModel.clearError() }
+                    )
+                }
             }
             
             uiState.song != null -> {
-                SongContent(
-                    song = uiState.song!!,
-                    chords = uiState.chords,
-                    showChords = uiState.showChords,
-                    transposition = uiState.transposition,
-                    onTranspose = { semitones -> viewModel.transposeChords(semitones) },
-                    modifier = Modifier.padding(paddingValues)
-                )
+                    SongContent(
+                        song = uiState.song!!,
+                        chords = uiState.chords,
+                        showChords = uiState.showChords,
+                        transposition = uiState.transposition,
+                        onTranspose = { semitones -> viewModel.transposeChords(semitones) },
+                        viewModel = viewModel,
+                        modifier = Modifier.padding(paddingValues)
+                    )
             }
+        }
+        
+        // Диалог подтверждения удаления
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text("Удалить песню") },
+                text = { Text("Вы уверены, что хотите удалить эту песню? Это действие нельзя отменить.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onDeleteClick(songId)
+                            showDeleteDialog = false
+                        }
+                    ) {
+                        Text("Удалить")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteDialog = false }
+                    ) {
+                        Text("Отмена")
+                    }
+                }
+            )
         }
     }
 }
@@ -99,6 +175,7 @@ private fun SongContent(
     showChords: Boolean,
     transposition: Int,
     onTranspose: (Int) -> Unit,
+    viewModel: SongDetailViewModel,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -107,37 +184,109 @@ private fun SongContent(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        // Управление аккордами и транспонированием
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Переключение видимости аккордов
+                Switch(
+                    checked = showChords,
+                    onCheckedChange = { viewModel.toggleChordsVisibility() }
+                )
+                
+                // Управление транспонированием
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { onTranspose(-1) }
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Понизить на полтона"
+                        )
+                    }
+                    
+                    Text(
+                        text = if (transposition == 0) "0" else if (transposition > 0) "+$transposition" else "$transposition",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    IconButton(
+                        onClick = { onTranspose(1) }
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Повысить на полтона"
+                        )
+                    }
+                    
+                    IconButton(
+                        onClick = { viewModel.resetTransposition() }
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Сбросить транспонирование"
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Заголовок песни
         Text(
             text = "${song.number}. ${song.title}",
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
-        
-        if (song.author != null) {
-            Text(
-                text = song.author,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Настройки аккордов
-        if (chords.isNotEmpty() && showChords) {
-            ChordControls(
-                transposition = transposition,
-                onTranspose = onTranspose
+        // Текст песни
+        val fontSize by AppSettings.fontSize.collectAsStateWithLifecycle()
+        if (showChords) {
+            Text(
+                text = song.text,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = fontSize.sp
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(16.dp))
+        } else {
+            // Показываем текст без аккордов - убираем только строки с аккордами
+            val textWithoutChords = song.text.lines().map { line ->
+                // Проверяем, является ли строка строкой с аккордами
+                // Строка с аккордами содержит только аккорды, пробелы и специальные символы
+                val chordPattern = Regex("""^[\s\w#b/]+$""")
+                if (chordPattern.matches(line) && line.isNotBlank() && 
+                    line.any { it.isLetter() } && // Содержит буквы (аккорды)
+                    !line.any { it.isDigit() } && // Не содержит цифр (не текст песни)
+                    !line.contains(" ") || line.trim().matches(Regex("""^[A-H][#b]?[majmin]?[0-9]?(\s+[A-H][#b]?[majmin]?[0-9]?)*$"""))) { // Проверяем на аккорды
+                    "" // Убираем строку с аккордами
+                } else {
+                    line // Оставляем текст песни
+                }
+            }.filter { it.isNotBlank() }.joinToString("\n")
+            
+            Text(
+                text = textWithoutChords,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = fontSize.sp
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
-        
-        // Текст песни с аккордами
-        SongTextWithChords(
-            text = song.text,
-            chords = if (showChords) chords else emptyList()
-        )
     }
 }
 

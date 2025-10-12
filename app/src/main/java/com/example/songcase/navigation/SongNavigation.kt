@@ -5,8 +5,12 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.songcase.data.SongDataStore
+import com.example.songcase.ui.screen.AddSongScreen
 import com.example.songcase.ui.screen.FavoritesScreen
 import com.example.songcase.ui.screen.ImportSongScreen
+import com.example.songcase.ui.screen.JsonImportScreen
+import com.example.songcase.ui.screen.SettingsScreen
 import com.example.songcase.ui.screen.SongDetailScreen
 import com.example.songcase.ui.screen.SongEditorScreen
 import com.example.songcase.ui.screen.SongListScreen
@@ -25,13 +29,24 @@ fun SongNavigation(
                     navController.navigate("song_detail/$songId")
                 },
                 onAddSongClick = {
-                    navController.navigate("song_editor")
+                    navController.navigate("add_song")
                 },
                 onFavoritesClick = {
                     navController.navigate("favorites")
                 },
-                onImportClick = {
-                    navController.navigate("import_song")
+                onJsonImportClick = {
+                    navController.navigate("json_import")
+                }
+            )
+        }
+        
+        composable("add_song") {
+            AddSongScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onSaveClick = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -52,6 +67,16 @@ fun SongNavigation(
             SongDetailScreen(
                 songId = songId,
                 onBackClick = {
+                    navController.popBackStack()
+                },
+                onEditClick = { editSongId ->
+                    navController.navigate("song_editor/$editSongId")
+                },
+                onSettingsClick = {
+                    navController.navigate("settings")
+                },
+                onDeleteClick = { deleteSongId ->
+                    SongDataStore.deleteSong(deleteSongId)
                     navController.popBackStack()
                 }
             )
@@ -76,6 +101,25 @@ fun SongNavigation(
                     navController.popBackStack()
                 },
                 onSaveClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable("json_import") {
+            JsonImportScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onImportSuccess = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable("settings") {
+            SettingsScreen(
+                onBackClick = {
                     navController.popBackStack()
                 }
             )
