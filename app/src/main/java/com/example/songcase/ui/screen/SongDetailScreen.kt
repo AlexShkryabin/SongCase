@@ -5,10 +5,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
@@ -20,11 +20,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import com.example.songcase.data.AppSettings
+import com.example.songcase.data.SongDataStore
 // Hilt removed for simplicity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.songcase.data.model.Chord
@@ -41,6 +49,7 @@ fun SongDetailScreen(
     viewModel: SongDetailViewModel = remember { SongDetailViewModel() }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val fontSize by AppSettings.fontSize.collectAsStateWithLifecycle()
     var showDeleteDialog by remember { mutableStateOf(false) }
     
     LaunchedEffect(songId) {
@@ -48,6 +57,19 @@ fun SongDetailScreen(
     }
     
     Scaffold(
+        modifier = Modifier.onKeyEvent { keyEvent ->
+            when (keyEvent.key) {
+                Key.VolumeUp -> {
+                    AppSettings.increaseFontSize()
+                    true
+                }
+                Key.VolumeDown -> {
+                    AppSettings.decreaseFontSize()
+                    true
+                }
+                else -> false
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Песня") },
@@ -64,9 +86,17 @@ fun SongDetailScreen(
                         )
                     }
                     IconButton(onClick = { viewModel.toggleFavorite() }) {
+                        val favoriteColor = remember { Color(0xFFFFC107) }
+                        val inactiveColor = remember { Color(0xFFc9c5d8) }
+                        val animatedColor by animateColorAsState(
+                            targetValue = if (uiState.song?.isFavorite == true) favoriteColor else inactiveColor,
+                            animationSpec = tween(200) // Быстрая анимация
+                        )
                         Icon(
-                            if (uiState.song?.isFavorite == true) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Добавить в избранное"
+                            Icons.Default.Star,
+                            contentDescription = "Добавить в избранное",
+                            // ЗВЕЗДОЧКА: желтая при активном состоянии, с контуром при неактивном
+                            tint = animatedColor
                         )
                     }
                     var showMenu by remember { mutableStateOf(false) }
@@ -81,6 +111,47 @@ fun SongDetailScreen(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+                            // Управление размером шрифта
+                            DropdownMenuItem(
+                                text = { 
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        //horizontalArrangement = Arrangement.SpaceBetween,
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(text = "Размер шрифта")
+                                        Spacer(modifier = Modifier.height(5.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            IconButton(
+                                                onClick = { AppSettings.decreaseFontSize() },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.KeyboardArrowDown, 
+                                                    contentDescription = "Уменьшить",
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = "${fontSize}sp",
+                                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp)
+                                            )
+                                            IconButton(
+                                                onClick = { AppSettings.increaseFontSize() },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.KeyboardArrowUp, 
+                                                    contentDescription = "Увеличить",
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                onClick = { /* Не закрываем меню при клике на элементы управления */ }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
                             DropdownMenuItem(
                                 text = { Text("Настройки") },
                                 onClick = {
@@ -191,14 +262,19 @@ private fun SongContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(1.dp), // уменьшить высоту блока транспонирования: меняйте этот паддинг
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = "Аккорды",
+                    modifier = Modifier.padding(start = 8.dp)
+                )
                 // Переключение видимости аккордов
                 Switch(
                     checked = showChords,
-                    onCheckedChange = { viewModel.toggleChordsVisibility() }
+                    onCheckedChange = { viewModel.toggleChordsVisibility() },
+                    modifier = Modifier.scale(0.7f)
                 )
                 
                 // Управление транспонированием
@@ -242,7 +318,7 @@ private fun SongContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Заголовок песни
         Text(
@@ -251,33 +327,37 @@ private fun SongContent(
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            //Spacer(modifier = Modifier.height(2.dp))
         
         // Текст песни
         val fontSize by AppSettings.fontSize.collectAsStateWithLifecycle()
+
+        // Выводим текст как есть, без обработки спецмаркеров
+        val processedText = song.text
         if (showChords) {
             Text(
-                text = song.text,
+                text = processedText,
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontSize = fontSize.sp
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
         } else {
-            // Показываем текст без аккордов - убираем только строки с аккордами
-            val textWithoutChords = song.text.lines().map { line ->
-                // Проверяем, является ли строка строкой с аккордами
-                // Строка с аккордами содержит только аккорды, пробелы и специальные символы
-                val chordPattern = Regex("""^[\s\w#b/]+$""")
-                if (chordPattern.matches(line) && line.isNotBlank() && 
-                    line.any { it.isLetter() } && // Содержит буквы (аккорды)
-                    !line.any { it.isDigit() } && // Не содержит цифр (не текст песни)
-                    !line.contains(" ") || line.trim().matches(Regex("""^[A-H][#b]?[majmin]?[0-9]?(\s+[A-H][#b]?[majmin]?[0-9]?)*$"""))) { // Проверяем на аккорды
-                    "" // Убираем строку с аккордами
-                } else {
-                    line // Оставляем текст песни
-                }
-            }.filter { it.isNotBlank() }.joinToString("\n")
+            // Показываем текст без аккордов — убираем только строки, где все токены являются аккордами (включая слэш-аккорды, например Am/C)
+            val lines = processedText.lines()
+            val out = mutableListOf<String>()
+
+            for (line in lines) {
+                val trimmed = line.trimEnd()
+                
+                // Удаляем строки с аккордами, но сохраняем пустые строки
+                // Проверяем, является ли вся строка аккордами (включая варианты с пробелами в скобках)
+                val isChordLine = trimmed.isNotEmpty() && com.example.songcase.utils.ChordUtils.isChordLine(trimmed)
+                if (isChordLine) continue
+                
+                out.add(line)
+            }
+            val textWithoutChords = out.joinToString("\n")
             
             Text(
                 text = textWithoutChords,
@@ -367,7 +447,8 @@ private fun SongTextWithChords(
                         text = chord.chord,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        // ЦВЕТ АККОРДОВ: темно-синий (изменить здесь при необходимости)
+                        color = Color(0xFF2d0da5) // Темно-синий цвет для аккордов
                     )
                     
                     currentPosition = chord.position + chord.chord.length

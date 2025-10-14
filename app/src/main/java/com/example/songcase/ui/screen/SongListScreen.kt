@@ -1,21 +1,25 @@
 package com.example.songcase.ui.screen
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 // Hilt removed for simplicity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.songcase.data.SongDataStore
 import com.example.songcase.data.model.Song
 import com.example.songcase.ui.viewmodel.SongListViewModel
 
@@ -26,16 +30,52 @@ fun SongListScreen(
     onAddSongClick: () -> Unit,
     onFavoritesClick: () -> Unit,
     onJsonImportClick: () -> Unit,
+    onDeleteSong: (Long) -> Unit = {},
     viewModel: SongListViewModel = remember { SongListViewModel() }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showSearch by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var songToDelete by remember { mutableStateOf<Long?>(null) }
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Песенник") },
+                title = {
+                    // Выпадающее меню переключения между песенниками
+                    var expanded by remember { mutableStateOf(false) }
+                    val current by SongDataStore.currentSongbook.collectAsStateWithLifecycle()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val currentTitle = when (current) {
+                            SongDataStore.SongbookType.BUILT_IN -> "Песнь возрождения"
+                            SongDataStore.SongbookType.CUSTOM -> "Мои псалмы"
+                        }
+                        Text(
+                            text = currentTitle,
+                            modifier = Modifier
+                                .clickable { expanded = true }
+                        )
+                        // Маленький треугольник, сигнализирующий выпадающее меню
+                        Text(" \u25BE", modifier = Modifier.clickable { expanded = true })
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Песнь возрождения") },
+                                onClick = {
+                                    SongDataStore.switchSongbook(SongDataStore.SongbookType.BUILT_IN)
+                                    expanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Мои псалмы") },
+                                onClick = {
+                                    SongDataStore.switchSongbook(SongDataStore.SongbookType.CUSTOM)
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = { showSearch = !showSearch }) {
                         Icon(Icons.Default.Search, contentDescription = "Поиск")
@@ -43,11 +83,10 @@ fun SongListScreen(
                     IconButton(onClick = onAddSongClick) {
                         Icon(Icons.Default.Add, contentDescription = "Добавить песню")
                     }
-                    IconButton(onClick = onJsonImportClick) {
-                        Text("JSON", style = MaterialTheme.typography.bodySmall)
-                    }
                     IconButton(onClick = onFavoritesClick) {
-                        Icon(Icons.Default.Favorite, contentDescription = "Избранное")
+                        // Иконка избранного не меняется, но мы меняем иконку в ячейке на звезду
+                        Icon(Icons.Default.Star, contentDescription = "Избранное", tint =  androidx.compose.ui.graphics.Color(0xFFFFC107))
+
                     }
                 }
             )
@@ -93,11 +132,48 @@ fun SongListScreen(
                         onSongClick = onSongClick,
                         onToggleFavorite = { song -> 
                             viewModel.toggleFavorite(song)
-                        }
+                        },
+                        onDeleteSong = { songId ->
+                    songToDelete = songId
+                    showDeleteDialog = true
+                }
                     )
                 }
             }
         }
+    }
+    
+    // Диалог подтверждения удаления
+    if (showDeleteDialog && songToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showDeleteDialog = false
+                songToDelete = null
+            },
+            title = { Text("Удалить песню") },
+            text = { Text("Вы уверены, что хотите удалить эту песню?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        songToDelete?.let { onDeleteSong(it) }
+                        showDeleteDialog = false
+                        songToDelete = null
+                    }
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        songToDelete = null
+                    }
+                ) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 
@@ -120,7 +196,8 @@ private fun SearchBar(
 private fun SongList(
     songs: List<Song>,
     onSongClick: (Long) -> Unit,
-    onToggleFavorite: (Song) -> Unit
+    onToggleFavorite: (Song) -> Unit,
+    onDeleteSong: (Long) -> Unit = {}
 ) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -130,7 +207,11 @@ private fun SongList(
             SongItem(
                 song = song,
                 onClick = { onSongClick(song.id) },
-                onToggleFavorite = { onToggleFavorite(song) }
+                onToggleFavorite = { onToggleFavorite(song) },
+                onLongPress = { 
+                    // Удаление песни (проверка типа песенника будет в onDeleteSong)
+                    onDeleteSong(song.id)
+                }
             )
         }
     }
@@ -140,16 +221,23 @@ private fun SongList(
 private fun SongItem(
     song: Song,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onLongPress: () -> Unit = {}
 ) {
     Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { onLongPress() }
+                )
+            }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(8.dp), // уменьшить высоту строки: изменяйте отступ здесь
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
@@ -164,10 +252,11 @@ private fun SongItem(
             
             IconButton(onClick = onToggleFavorite) {
                 Icon(
-                    Icons.Default.Favorite,
+                    Icons.Default.Star,
                     contentDescription = "Добавить в избранное",
-                    tint = if (song.isFavorite) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    // ЗВЕЗДОЧКА: желтая при активном состоянии, с контуром при неактивном
+                    tint = if (song.isFavorite) androidx.compose.ui.graphics.Color(0xFFFFC107) // Желтая
+                    else androidx.compose.ui.graphics.Color(0xFFc9c5d8) // С контуром (цвет по умолчанию)
                 )
             }
         }

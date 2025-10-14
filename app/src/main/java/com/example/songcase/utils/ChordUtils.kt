@@ -3,120 +3,104 @@ package com.example.songcase.utils
 import com.example.songcase.data.model.Chord
 
 object ChordUtils {
-    
-    // Массив нот для транспонирования (включая H для немецкой системы)
-    private val notes = arrayOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "H")
-    
-    // Регулярное выражение для поиска аккордов (включая H)
-    private val chordPattern = Regex("""[A-H][#b]?(?:m|maj|min|dim|aug|sus|add|7|9|11|13)?(?:/[A-H][#b]?)?""")
-    
-    /**
-     * Находит все аккорды в тексте песни
-     */
-    fun findChordsInText(text: String): List<Chord> {
-        val chords = mutableListOf<Chord>()
-        val lines = text.split("\n")
-        
-        lines.forEachIndexed { lineIndex, line ->
-            val matches = chordPattern.findAll(line)
-            matches.forEach { matchResult ->
-                val chord = Chord(
-                    id = 0,
-                    songId = 0,
-                    chord = matchResult.value,
-                    position = matchResult.range.first,
-                    lineNumber = lineIndex
-                )
-                chords.add(chord)
-            }
-        }
-        
-        return chords
-    }
-    
-    /**
-     * Транспонирует аккорд на указанное количество полутонов
-     */
+    // Маппинг аккордов для транспонирования (включая H для немецкой нотации)
+    private val chordMap = mapOf(
+        "C" to 0, "C#" to 1, "Db" to 1, "D" to 2, "D#" to 3, "Eb" to 3,
+        "E" to 4, "F" to 5, "F#" to 6, "Gb" to 6, "G" to 7, "G#" to 8,
+        "Ab" to 8, "A" to 9, "A#" to 10, "Bb" to 10, "B" to 11, "H" to 11
+    )
+
+    private val reverseChordMap = mapOf(
+        0 to "C", 1 to "C#", 2 to "D", 3 to "D#", 4 to "E", 5 to "F",
+        6 to "F#", 7 to "G", 8 to "G#", 9 to "A", 10 to "A#", 11 to "B"
+    )
+
+    // Простое регулярное выражение для поиска аккордов
+    // Поддерживает: F, (F), Em7, (Em7), Am/G, (Am/G), Hm (H)
+    private val chordRegex = Regex("""(?:\([A-H][#b]?(?:m|maj|min|dim|aug|sus|add|7|9|11|13)?(?:/[A-H][#b]?)?\)|[A-H][#b]?(?:m|maj|min|dim|aug|sus|add|7|9|11|13)?(?:/[A-H][#b]?)?(?:\([A-H][#b]?\))?)""")
+
+    /** Транспонирует один аккорд, сохраняя суффиксы и бас */
     fun transposeChord(chord: String, semitones: Int): String {
         if (semitones == 0) return chord
-        
-        // Разбираем аккорд на основную ноту и суффикс
-        val (rootNote, suffix) = parseChord(chord)
-        val transposedRoot = transposeNote(rootNote, semitones)
-        
-        return if (suffix.isNotEmpty()) {
-            "$transposedRoot$suffix"
-        } else {
-            transposedRoot
+        val (root, suffix) = extractRootAndSuffix(chord)
+        val rootNumber = chordMap[root] ?: return chord
+        val newNumber = (rootNumber + semitones + 12) % 12
+        val newRoot = reverseChordMap[newNumber] ?: return chord
+
+        // Транспонируем бас, если он есть
+        val bassMatch = Regex("""/([A-H][#b]?)""").find(suffix)
+        val newSuffix = if (bassMatch != null) {
+            val bass = bassMatch.groupValues[1]
+            val bassNum = chordMap[bass]
+            if (bassNum != null) {
+                val newBassNum = (bassNum + semitones + 12) % 12
+                val newBass = reverseChordMap[newBassNum] ?: bass
+                suffix.replace(bass, newBass)
+            } else suffix
+        } else suffix
+
+        return newRoot + newSuffix
+    }
+
+    /** Возвращает список аккордов с позициями построчно */
+    fun findChordsInText(text: String): List<Chord> {
+        val result = mutableListOf<Chord>()
+        val lines = text.split("\n")
+        lines.forEachIndexed { lineIndex, line ->
+            chordRegex.findAll(line).forEach { mr ->
+                result.add(
+                    Chord(
+                        id = 0,
+                        songId = 0,
+                        chord = mr.value,
+                        position = mr.range.first,
+                        lineNumber = lineIndex
+                    )
+                )
+            }
         }
+        return result
     }
-    
-    /**
-     * Транспонирует ноту на указанное количество полутонов
-     */
-    private fun transposeNote(note: String, semitones: Int): String {
-        val currentIndex = notes.indexOf(note)
-        if (currentIndex == -1) return note
-        
-        val newIndex = (currentIndex + semitones) % 12
-        val adjustedIndex = if (newIndex < 0) newIndex + 12 else newIndex
-        
-        return notes[adjustedIndex]
-    }
-    
-    /**
-     * Разбирает аккорд на основную ноту и суффикс
-     */
-    private fun parseChord(chord: String): Pair<String, String> {
-        // Ищем основную ноту (C, C#, D, D#, E, F, F#, G, G#, A, A#, B, H)
-        val rootNotePattern = Regex("""^([A-H][#b]?)""")
-        val rootMatch = rootNotePattern.find(chord)
-        
-        if (rootMatch != null) {
-            val rootNote = rootMatch.value
-            val suffix = chord.substring(rootNote.length)
-            return Pair(rootNote, suffix)
-        }
-        
-        return Pair(chord, "")
-    }
-    
-    /**
-     * Транспонирует текст песни с аккордами
-     */
+
+    /** Транспонирует все аккорды внутри текста */
     fun transposeText(text: String, semitones: Int): String {
         if (semitones == 0) return text
-        
-        val lines = text.split("\n")
-        val transposedLines = lines.map { line ->
-            chordPattern.replace(line) { matchResult ->
-                transposeChord(matchResult.value, semitones)
-            }
-        }
-        
-        return transposedLines.joinToString("\n")
+        return chordRegex.replace(text) { mr -> transposeChord(mr.value, semitones) }
     }
-    
-    /**
-     * Проверяет, является ли строка аккордом
-     */
-    fun isChord(text: String): Boolean {
-        return chordPattern.matches(text.trim())
+
+    private fun extractRootAndSuffix(chord: String): Pair<String, String> {
+        val clean = chord.trim()
+        val root = Regex("""^([A-H][#b]?)""").find(clean)?.value ?: return chord to ""
+        val suffix = clean.substring(root.length)
+        return root to suffix
     }
-    
-    /**
-     * Получает список всех возможных аккордов для транспонирования
-     */
-    fun getAllPossibleChords(): List<String> {
-        val suffixes = listOf("", "m", "maj", "min", "dim", "aug", "sus2", "sus4", "7", "m7", "maj7", "9", "m9", "11", "13")
-        val chords = mutableListOf<String>()
+
+    fun isChord(token: String): Boolean {
+        val trimmed = token.trim()
+        if (trimmed.isEmpty()) return false
         
-        notes.forEach { note ->
-            suffixes.forEach { suffix ->
-                chords.add(note + suffix)
-            }
-        }
+        // Полное регулярное выражение для всех типов аккордов
+        // Поддерживает: E, E5, E6/9, E7(#9), E7(b5), E7sus4, Eadd9, Eaug, Eb, Ebm, Ebm7(b5), E#maj7, (E), (Em7), E/G
+        val fullChordPattern = Regex("""^[A-H][#b]?(?:[0-9]+(?:/[0-9]+)?|m(?:aj)?(?:[0-9]+)?|min(?:[0-9]+)?|dim(?:[0-9]+)?|aug|sus[0-9]+|add[0-9]+|maj[0-9]+)?(?:\([#b]?[0-9]+\))?(?:/[A-H][#b]?)?(?:\([A-H][#b]?\))?$""")
         
-        return chords
+        // Паттерн для аккордов в скобках
+        val parenthesesPattern = Regex("""^\([A-H][#b]?(?:[0-9]+(?:/[0-9]+)?|m(?:aj)?(?:[0-9]+)?|min(?:[0-9]+)?|dim(?:[0-9]+)?|aug|sus[0-9]+|add[0-9]+|maj[0-9]+)?(?:\([#b]?[0-9]+\))?(?:/[A-H][#b]?)?\)$""")
+        
+        return fullChordPattern.matches(trimmed) || parenthesesPattern.matches(trimmed)
+    }
+
+    fun isChordLine(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.isEmpty()) return false
+        
+        // Заменяем слэши на пробелы, чтобы Am/G стал Am G
+        val normalizedLine = trimmed.replace("/", " ")
+        
+        // Разбиваем на токены по пробелам
+        val tokens = normalizedLine.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        
+        // Проверяем, что все токены являются аккордами
+        return tokens.isNotEmpty() && tokens.all { isChord(it) }
     }
 }
+

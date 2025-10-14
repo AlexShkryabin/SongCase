@@ -5,7 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,7 +69,7 @@ fun FavoritesScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            Icons.Default.Favorite,
+                            Icons.Default.Star,
                             contentDescription = null,
                             modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -133,9 +133,10 @@ private fun SongItem(
             
             IconButton(onClick = onToggleFavorite) {
                 Icon(
-                    Icons.Default.Favorite,
+                    Icons.Default.Star,
                     contentDescription = "Удалить из избранного",
-                    tint = MaterialTheme.colorScheme.primary
+                    // ЗВЕЗДОЧКА: желтая при активном состоянии (в избранном)
+                    tint = androidx.compose.ui.graphics.Color(0xFFFFC107)
                 )
             }
         }

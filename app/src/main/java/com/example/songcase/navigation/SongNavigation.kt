@@ -35,7 +35,14 @@ fun SongNavigation(
                     navController.navigate("favorites")
                 },
                 onJsonImportClick = {
-                    navController.navigate("json_import")
+                    // Импорт JSON больше не используется: автозагрузка из assets при первом запуске
+                },
+                onDeleteSong = { songId ->
+                    // Удаление песни (только для кастомного песенника)
+                    val currentSongbook = SongDataStore.currentSongbook.value
+                    if (currentSongbook != SongDataStore.SongbookType.BUILT_IN) {
+                        SongDataStore.deleteSong(songId)
+                    }
                 }
             )
         }
@@ -106,16 +113,7 @@ fun SongNavigation(
             )
         }
         
-        composable("json_import") {
-            JsonImportScreen(
-                onBackClick = {
-                    navController.popBackStack()
-                },
-                onImportSuccess = {
-                    navController.popBackStack()
-                }
-            )
-        }
+        // Экран json_import удален из навигации; автозагрузка выполняется при старте
         
         composable("settings") {
             SettingsScreen(

@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 // Hilt removed for simplicity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.songcase.data.SongDataStore
 import com.example.songcase.ui.viewmodel.SongEditorViewModel
 import com.example.songcase.ui.viewmodel.SongEditorUiState
 
@@ -26,6 +27,7 @@ fun SongEditorScreen(
     viewModel: SongEditorViewModel = remember { SongEditorViewModel() }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentSongbook by SongDataStore.currentSongbook.collectAsStateWithLifecycle()
     
     LaunchedEffect(songId) {
         if (songId != null) {
@@ -87,6 +89,7 @@ fun SongEditorScreen(
                             onTitleChange = { viewModel.updateTitle(it) },
                             onTextChange = { viewModel.updateText(it) },
                             onNumberChange = { viewModel.updateNumber(it) },
+                            currentSongbook = currentSongbook,
                             modifier = Modifier.padding(paddingValues)
                         )
             }
@@ -100,6 +103,7 @@ private fun SongEditorForm(
     onTitleChange: (String) -> Unit,
     onTextChange: (String) -> Unit,
     onNumberChange: (Int) -> Unit,
+    currentSongbook: SongDataStore.SongbookType,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -109,15 +113,20 @@ private fun SongEditorForm(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Номер песни
+        // Номер песни (отключен для "Песнь возрождения")
         OutlinedTextField(
             value = uiState.number.toString(),
             onValueChange = { value ->
-                value.toIntOrNull()?.let { onNumberChange(it) }
+                // Разрешаем редактирование только для кастомного песенника
+                if (currentSongbook != SongDataStore.SongbookType.BUILT_IN) {
+                    value.toIntOrNull()?.let { onNumberChange(it) }
+                }
             },
             label = { Text("Номер песни") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            enabled = currentSongbook != SongDataStore.SongbookType.BUILT_IN,
+            readOnly = currentSongbook == SongDataStore.SongbookType.BUILT_IN
         )
         
         // Название песни
