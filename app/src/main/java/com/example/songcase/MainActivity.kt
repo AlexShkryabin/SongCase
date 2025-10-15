@@ -1,6 +1,7 @@
 package com.example.songcase
 
 import android.os.Bundle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,6 +19,8 @@ import com.example.songcase.ui.theme.SongCaseTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Install Android 12+ splash screen to ensure proper handoff from the splash theme
+        installSplashScreen()
         enableEdgeToEdge()
         
         // Инициализируем SongDataStore с контекстом

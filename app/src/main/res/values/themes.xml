@@ -2,4 +2,20 @@
 <resources>
 
     <style name="Theme.SongCase" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash theme for Android 12+ -->
+    <style name="Theme.SongCase.Splash" parent="Theme.SplashScreen">
+        <!-- App icon on splash -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <!-- Background behind the icon -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <!-- Post-splash theme -->
+        <item name="postSplashScreenTheme">@style/Theme.SongCase</item>
+    </style>
+
+    <!-- Pre-Android 12 fallback -->
+    <style name="Theme.SongCase.Splash.Pre12" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+    </style>
+
 </resources>
