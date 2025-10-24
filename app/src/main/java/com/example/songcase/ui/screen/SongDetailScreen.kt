@@ -152,13 +152,13 @@ fun SongDetailScreen(
                                 onClick = { /* Не закрываем меню при клике на элементы управления */ }
                             )
                             Spacer(modifier = Modifier.height(10.dp))
-                            DropdownMenuItem(
-                                text = { Text("Настройки") },
-                                onClick = {
-                                    onSettingsClick()
-                                    showMenu = false
-                                }
-                            )
+                                //DropdownMenuItem(
+                               // text = { Text("Настройки") },
+                              //  onClick = {
+                              //      onSettingsClick()
+                              //      showMenu = false
+                              //  }
+                           // )
                             DropdownMenuItem(
                                 text = { Text("Удалить песню") },
                                 onClick = {
@@ -266,16 +266,21 @@ private fun SongContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Аккорды",
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-                // Переключение видимости аккордов
-                Switch(
-                    checked = showChords,
-                    onCheckedChange = { viewModel.toggleChordsVisibility() },
-                    modifier = Modifier.scale(0.7f)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 12.dp) // ← отступ слева
+                ) {
+                    Text(
+                        text = "Аккорды",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.width(22.dp)) // фиксированное расстояние между текстом и Switch
+                    Switch(
+                        checked = showChords,
+                        onCheckedChange = { viewModel.toggleChordsVisibility() },
+                        modifier = Modifier.scale(0.8f) // можно чуть уменьшить размер
+                    )
+                }
                 
                 // Управление транспонированием
                 Row(
